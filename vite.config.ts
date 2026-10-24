@@ -47,15 +47,16 @@ function serviceWorker(): Plugin {
     apply: 'build',
     writeBundle(options, bundle) {
       const dir = options.dir!;
+      // 页面骨架用 / 而不是 /index.html：Cloudflare Pages 会把 /index.html 308 到 /，带重定向的响应不能拿来回应导航
       const files = [
-        '/index.html',
+        '/',
         ...Object.keys(bundle)
           .filter((f) => f.startsWith('assets/'))
           .map((f) => '/' + f),
         ...PRECACHE_PUBLIC,
       ];
       const hash = createHash('sha256');
-      for (const f of files) hash.update(f).update(readFileSync(join(dir, f)));
+      for (const f of files) hash.update(f).update(readFileSync(join(dir, f === '/' ? 'index.html' : f)));
       const source = readFileSync(fileURLToPath(new URL('./src/sw.js', import.meta.url)), 'utf8')
         .replace('__VERSION__', JSON.stringify(hash.digest('hex').slice(0, 12)))
         .replace('__PRECACHE__', JSON.stringify(files));

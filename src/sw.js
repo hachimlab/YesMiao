@@ -7,7 +7,12 @@
 const VERSION = __VERSION__;
 const PRECACHE = __PRECACHE__;
 const CACHE = 'yesmiao-' + VERSION;
-const SHELL = '/index.html';
+const SHELL = '/';
+
+// 浏览器拒绝用重定向得来的响应回应导航（报 ERR_FAILED），万一托管平台又加了重定向，重新包一层去掉标记
+function unredirect(res) {
+  return res && res.redirected ? new Response(res.body, res) : res;
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,7 +45,7 @@ self.addEventListener('fetch', (event) => {
 
   if (req.mode === 'navigate' && !/\.\w+$/.test(url.pathname)) {
     // SPA 的所有路由都是同一个 index.html；带扩展名的（直接打开 robots.txt 之类）照常走网络
-    event.respondWith(caches.match(SHELL, { cacheName: CACHE }).then((res) => res || fetch(req)));
+    event.respondWith(caches.match(SHELL, { cacheName: CACHE }).then((res) => unredirect(res) || fetch(req)));
     return;
   }
   event.respondWith(caches.match(req, { cacheName: CACHE }).then((res) => res || fetch(req)));
