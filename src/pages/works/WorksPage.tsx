@@ -34,45 +34,53 @@ export default function WorksPage() {
   const { workView } = useAppearance();
 
   return (
-    <div className="container">
-      <div className="Page-container">
-        <aside className="Page-sidebar">
-          <SideNav>
-            {FEEDS.map((f) => (
-              <li key={f.value}>
-                <Link to={f.value === 'featured' ? '/works' : `/works?feed=${f.value}`} className={feed === f.value ? 'active' : ''}>
-                  <Icon name={f.icon} />
-                  {f.label}
-                </Link>
-              </li>
-            ))}
-          </SideNav>
-        </aside>
-        <div className="Page-content">
-          <div className="IndexPage-toolbar">
-            <span className="muted">{FEEDS.find((f) => f.value === feed)?.label}</span>
-            <div className="IndexPage-toolbar-action">
-              <div className="ButtonGroup" aria-label="作品布局">
-                {WORK_VIEWS.map((v) => (
-                  <Button
-                    key={v.value}
-                    icon={v.icon}
-                    title={v.label}
-                    aria-label={v.label}
-                    aria-pressed={workView === v.value}
-                    className={workView === v.value ? 'active' : ''}
-                    onClick={() => updateAppearance({ workView: v.value })}
-                  />
-                ))}
+    <>
+      <div className="PickcatBanner">
+        推荐前往 Pickcat 社区查看作品
+        <a href="https://pickcat.dao3.fun/works" target="_blank" rel="noopener noreferrer">
+          点击前往 →
+        </a>
+      </div>
+      <div className="container">
+        <div className="Page-container">
+          <aside className="Page-sidebar">
+            <SideNav>
+              {FEEDS.map((f) => (
+                <li key={f.value}>
+                  <Link to={f.value === 'featured' ? '/works' : `/works?feed=${f.value}`} className={feed === f.value ? 'active' : ''}>
+                    <Icon name={f.icon} />
+                    {f.label}
+                  </Link>
+                </li>
+              ))}
+            </SideNav>
+          </aside>
+          <div className="Page-content">
+            <div className="IndexPage-toolbar">
+              <span className="muted">{FEEDS.find((f) => f.value === feed)?.label}</span>
+              <div className="IndexPage-toolbar-action">
+                <div className="ButtonGroup" aria-label="作品布局">
+                  {WORK_VIEWS.map((v) => (
+                    <Button
+                      key={v.value}
+                      icon={v.icon}
+                      title={v.label}
+                      aria-label={v.label}
+                      aria-pressed={workView === v.value}
+                      className={workView === v.value ? 'active' : ''}
+                      onClick={() => updateAppearance({ workView: v.value })}
+                    />
+                  ))}
+                </div>
+                <Button icon="refresh" title="刷新" onClick={() => list.refetch()} disabled={list.isRefetching} />
               </div>
-              <Button icon="refresh" title="刷新" onClick={() => list.refetch()} disabled={list.isRefetching} />
             </div>
+            <ListState list={list} empty="暂无作品">
+              {(items) => <WorkGrid works={items} />}
+            </ListState>
           </div>
-          <ListState list={list} empty="暂无作品">
-            {(items) => <WorkGrid works={items} />}
-          </ListState>
         </div>
       </div>
-    </div>
+    </>
   );
 }

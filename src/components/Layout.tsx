@@ -237,7 +237,13 @@ export default function Layout() {
           <Outlet />
         </main>
         <footer className="App-footer">
-          <div className="container">YesMiao 是社区用户维护的编程猫社区第三方前端，与编程猫官方无关。</div>
+          <div className="container">
+            <p>YesMiao 是社区用户维护的编程猫社区第三方前端，与编程猫官方无关。</p>
+            <a className="App-footer-link" href="https://github.com/hachimlab/yesmiao" target="_blank" rel="noopener noreferrer">
+              <Icon name="github" size={14} />
+              在 GitHub 上查看源码
+            </a>
+          </div>
         </footer>
       </div>
       <FirstVisitNotice />
