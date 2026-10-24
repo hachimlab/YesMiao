@@ -19,19 +19,19 @@
 ## 结构
 
 ```
-edge-functions/api/[[default]].js  API 代理（EdgeOne Edge Function），/api/* → api.codemao.cn/*
+functions/api/[[path]].js          API 代理（Cloudflare Pages Function），/api/* → api.codemao.cn/*
 src/api/                           接口封装与类型
 src/pages/                         页面（forum / works / user / me）
 src/components/                    通用组件
 src/sw.js                          Service Worker 模板，构建时填入预缓存清单输出为 dist/sw.js（开发环境不注册）
-edgeone.json                       SPA 路由回退与静态资源缓存
+public/_headers                    静态资源的缓存头（Cloudflare Pages）
 ```
 
 为什么需要代理：编程猫 API 只允许 `*.codemao.cn` 跨域访问，浏览器无法直接调用。代理还负责：
 
 - 只放行站点用到的接口（白名单），不做开放代理
 - 登录后把 token 存在本站的 httpOnly Cookie 里，页面脚本拿不到；转发时以 `authorization` Cookie 的形式发给编程猫
-- 未登录的读请求带 `Cache-Control: private, max-age=30`，减少函数调用次数
+- 未登录的读请求：浏览器缓存 30 秒（`Cache-Control: private, max-age=30`），并存进 Cloudflare 边缘缓存 60 秒，同一机房的访客共享，减少打到编程猫的请求；响应头 `X-Cache: HIT/MISS` 表示是否命中。登录后的请求和非 200 响应都不缓存
 
 编程猫没有按昵称找人的接口，用户搜索调用 HachimLab 的 [CodemaoUserDB](https://github.com/hachimlab/UserDB)（`udbapi.hachimlab.top`，允许跨域，浏览器直接请求，不经过代理）。和它的油猴插件一样，打开用户主页时会把该用户同步进库（同一用户 10 分钟一次），让更多人能被搜到。
 
@@ -45,12 +45,12 @@ npm install
 npm run dev
 ```
 
-开发服务器会直接调用 `edge-functions/api/[[default]].js`，行为与线上一致。
+开发服务器会直接调用 `functions/api/[[path]].js`，行为与线上一致（本地没有边缘缓存）。
 
 > npm 10.8 在解析 peer 依赖时有 bug，仓库里的 `.npmrc` 已设置 `legacy-peer-deps=true` 绕过。
 
-## 部署到 EdgeOne Makers（原 EdgeOne Pages）
+## 部署到 Cloudflare Pages
 
-1. 在 EdgeOne Makers 导入本仓库，构建命令 `npm run build`，输出目录 `dist`
-2. 加速区域选「全球可用区（不含中国大陆）」可免备案；有备案域名可选中国大陆可用区
-3. 绑定自定义域名。项目默认域名在中国大陆只能通过 3 小时有效的预览链接访问
+1. 在 Cloudflare Pages 导入本仓库，构建命令 `npm run build`，输出目录 `dist`
+2. `functions/` 目录会被自动识别为 Pages Functions，`/api/*` 由它转发；SPA 路由回退由 Pages 自动处理（`dist` 里没有 404.html）
+3. 国内访问较慢，见 [docs/research.md](docs/research.md) 的托管平台对比

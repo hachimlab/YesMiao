@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// 本地开发直接复用线上的 Edge Function，保证行为一致
-import { onRequest } from './edge-functions/api/[[default]].js';
+// 本地开发直接复用线上的 Pages Function，保证行为一致
+import { onRequest } from './functions/api/[[path]].js';
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];

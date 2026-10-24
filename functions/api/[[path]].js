@@ -1,11 +1,14 @@
 // YesMiao API 代理：浏览器 -> /api/* -> https://api.codemao.cn/*
 // 编程猫 API 只允许 *.codemao.cn 跨域，所以所有请求都经由这里转发。
-// 运行在 EdgeOne Edge Functions 上，本地开发时由 vite.config.ts 直接调用同一个 onRequest。
+// 运行在 Cloudflare Pages Functions 上，本地开发时由 vite.config.ts 直接调用同一个 onRequest。
 
 const UPSTREAM = 'https://api.codemao.cn';
 const TOKEN_COOKIE = 'ym_token';
 const TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
 const COMMUNITY_PID = '65edCTyg';
+// 未登录的读请求：浏览器缓存 30 秒，Cloudflare 边缘缓存 60 秒（同一机房的访客共享，少打编程猫）
+const BROWSER_TTL = 30;
+const EDGE_TTL = 60;
 
 // 只放行站点用到的接口，避免被当成开放代理
 const ALLOWED = [
@@ -79,13 +82,31 @@ async function login(request) {
   return json({ user_info: data.user_info }, 200, { 'Set-Cookie': tokenCookie(token, TOKEN_MAX_AGE) });
 }
 
-async function proxy(request, path, search) {
+// 本地开发（Node）没有 caches，直接跳过边缘缓存
+const edgeCache = typeof caches !== 'undefined' ? caches.default : undefined;
+
+function withBrowserCache(res, cacheStatus) {
+  const out = new Response(res.body, res);
+  out.headers.set('Cache-Control', `private, max-age=${BROWSER_TTL}`);
+  out.headers.set('X-Cache', cacheStatus);
+  return out;
+}
+
+async function proxy(request, path, search, context) {
   if (!ALLOWED.some((re) => re.test(path))) {
     return json({ error_message: '该接口未开放' }, 403);
   }
   const token = readToken(request);
   const method = request.method.toUpperCase();
   const hasBody = !['GET', 'HEAD'].includes(method);
+
+  // 登录态的数据（is_liked 之类）每个人不同，只缓存未登录的 GET；缓存键只有网址，不带 Cookie
+  const cacheKey = edgeCache && method === 'GET' && !token ? new Request(`${UPSTREAM}${path}${search}`) : undefined;
+  if (cacheKey) {
+    const hit = await edgeCache.match(cacheKey);
+    if (hit) return withBrowserCache(hit, 'HIT');
+  }
+
   const res = await fetch(`${UPSTREAM}${path}${search}`, {
     method,
     headers: upstreamHeaders(token, request.headers.get('content-type')),
@@ -96,12 +117,20 @@ async function proxy(request, path, search) {
   const headers = new Headers();
   const contentType = res.headers.get('content-type');
   if (contentType) headers.set('Content-Type', contentType);
-  // 登录态的数据（is_liked 之类）不能被共享缓存；未登录的读请求让浏览器缓存 30 秒，省函数调用次数
-  headers.set('Cache-Control', method === 'GET' && !token ? 'private, max-age=30' : 'no-store');
+  // 登录态的数据不能被任何缓存保存；未登录的读请求让浏览器缓存 30 秒，省函数调用次数
+  headers.set('Cache-Control', method === 'GET' && !token ? `private, max-age=${BROWSER_TTL}` : 'no-store');
   if (res.status === 401 && token) headers.set('Set-Cookie', tokenCookie('', 0));
 
   const noBody = res.status === 204 || res.status === 304 || method === 'HEAD';
-  return new Response(noBody ? null : res.body, { status: res.status, headers });
+  const out = new Response(noBody ? null : res.body, { status: res.status, headers });
+  // 只存成功的响应，出错不缓存，免得一次失败卡住 60 秒
+  if (cacheKey && res.status === 200) {
+    const stored = out.clone();
+    stored.headers.set('Cache-Control', `public, max-age=${EDGE_TTL}`);
+    context.waitUntil(edgeCache.put(cacheKey, stored));
+    out.headers.set('X-Cache', 'MISS');
+  }
+  return out;
 }
 
 export async function onRequest(context) {
@@ -114,7 +143,7 @@ export async function onRequest(context) {
     if (path === '/_auth/logout' && request.method === 'POST') {
       return json({ ok: true }, 200, { 'Set-Cookie': tokenCookie('', 0) });
     }
-    return await proxy(request, path, url.search);
+    return await proxy(request, path, url.search, context);
   } catch (err) {
     return json({ error_message: '代理请求失败', detail: String(err && err.message) }, 502);
   }

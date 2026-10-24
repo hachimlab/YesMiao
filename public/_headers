@@ -1,0 +1,13 @@
+# Cloudflare Pages 静态资源的响应头规则（/api 的缓存头由 functions/api/[[path]].js 设置）
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.png
+  Cache-Control: public, max-age=86400
+
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=3600
