@@ -195,6 +195,10 @@ ul {
   margin-left: -10px;
   color: var(--primary-color);
 }
+/* 汉堡菜单只在手机上显示 */
+.Header-menu {
+  display: none;
+}
 .Header-logo {
   display: block;
   width: 30px;
@@ -1423,6 +1427,10 @@ textarea.FormControl {
   gap: 4px;
   margin: 16px 0 24px;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+.UserNav::-webkit-scrollbar {
+  display: none;
 }
 .UserNav a {
   display: inline-flex;
@@ -1986,6 +1994,11 @@ a.WorkStat:hover {
     gap: 6px;
     overflow-x: auto;
     padding-bottom: 6px;
+    /* 能横向滑动，但不显示滚动条 */
+    scrollbar-width: none;
+  }
+  .sideNav ul::-webkit-scrollbar {
+    display: none;
   }
   .sideNav li a,
   .sideNav li button {
@@ -2080,12 +2093,17 @@ a.WorkStat:hover {
     --avatar-column-width: 0px;
     --post-padding: 15px;
   }
-  .Header-title {
-    font-size: 16px;
-    margin-right: 0;
+  /* 手机顶栏只留搜索、铃铛和头像，Logo、板块切换、外观和 GitHub 收进汉堡菜单 */
+  .Header-title,
+  .Header-switch,
+  .Header-theme {
+    display: none;
   }
-  .Header-switch a {
-    padding: 5px 8px;
+  .Header-menu {
+    display: block;
+  }
+  .Header-back + .Header-menu {
+    margin-left: -6px;
   }
   .Header-container {
     gap: 6px;
@@ -2104,7 +2122,6 @@ a.WorkStat:hover {
     flex: 1;
     min-width: 0;
   }
-  /* 手机顶栏放不下，GitHub 链接只在宽屏显示 */
   .Header-github {
     display: none;
   }

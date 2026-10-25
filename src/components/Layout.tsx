@@ -27,15 +27,47 @@ const THEMES: { value: ThemeMode; label: string; icon: IconName }[] = [
   { value: 'auto', label: '跟随系统', icon: 'monitor' },
 ];
 
-function ThemeDropdown() {
+const GITHUB_URL = 'https://github.com/hachimlab/yesmiao';
+
+/** 深浅色、外观设置和安装：宽屏的外观下拉和手机的汉堡菜单共用 */
+function ThemeMenuItems() {
   const { theme } = useAppearance();
   const { installPrompt } = usePwa();
+  return (
+    <>
+      {THEMES.map((t) => (
+        <li key={t.value}>
+          <button onClick={() => updateAppearance({ theme: t.value })} aria-pressed={theme === t.value}>
+            <Icon name={t.icon} /> {t.label}
+            {theme === t.value && <Icon name="check" className="Dropdown-check" />}
+          </button>
+        </li>
+      ))}
+      <li className="Dropdown-separator" />
+      <li>
+        <Link to="/settings">
+          <Icon name="brush" /> 更多外观设置
+        </Link>
+      </li>
+      {installPrompt && (
+        <li>
+          <button onClick={install}>
+            <Icon name="download" /> 安装到桌面
+          </button>
+        </li>
+      )}
+    </>
+  );
+}
+
+function ThemeDropdown() {
+  const { theme } = useAppearance();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, open, setOpen);
   const current = THEMES.find((t) => t.value === theme)!;
   return (
-    <div className={`Dropdown${open ? ' open' : ''}`} ref={ref}>
+    <div className={`Dropdown Header-theme${open ? ' open' : ''}`} ref={ref}>
       <button
         className="Button Button--flat Button--icon"
         onClick={() => setOpen(!open)}
@@ -47,27 +79,45 @@ function ThemeDropdown() {
       </button>
       {open && (
         <ul className="Dropdown-menu Dropdown-menu--right" onClick={() => setOpen(false)}>
-          {THEMES.map((t) => (
-            <li key={t.value}>
-              <button onClick={() => updateAppearance({ theme: t.value })} aria-pressed={theme === t.value}>
-                <Icon name={t.icon} /> {t.label}
-                {theme === t.value && <Icon name="check" className="Dropdown-check" />}
-              </button>
-            </li>
-          ))}
-          <li className="Dropdown-separator" />
+          <ThemeMenuItems />
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** 手机顶栏只放得下搜索、铃铛和头像，板块切换、外观和 GitHub 都收进这里（宽屏不显示） */
+function MobileMenu({ onWorks }: { onWorks: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(ref, open, setOpen);
+  return (
+    <div className={`Dropdown Header-menu${open ? ' open' : ''}`} ref={ref}>
+      <button className="Button Button--flat Button--icon" onClick={() => setOpen(!open)} aria-label="菜单" aria-expanded={open}>
+        <Icon name="menu" size={20} />
+      </button>
+      {open && (
+        <ul className="Dropdown-menu" onClick={() => setOpen(false)}>
           <li>
-            <Link to="/settings">
-              <Icon name="brush" /> 更多外观设置
+            <Link to="/" aria-current={onWorks ? undefined : 'page'}>
+              <Icon name="comment" /> 论坛
+              {!onWorks && <Icon name="check" className="Dropdown-check" />}
             </Link>
           </li>
-          {installPrompt && (
-            <li>
-              <button onClick={install}>
-                <Icon name="download" /> 安装到桌面
-              </button>
-            </li>
-          )}
+          <li>
+            <Link to="/works" aria-current={onWorks ? 'page' : undefined}>
+              <Icon name="grid" /> 作品
+              {onWorks && <Icon name="check" className="Dropdown-check" />}
+            </Link>
+          </li>
+          <li className="Dropdown-separator" />
+          <ThemeMenuItems />
+          <li className="Dropdown-separator" />
+          <li>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+              <Icon name="github" /> GitHub 仓库
+            </a>
+          </li>
         </ul>
       )}
     </div>
@@ -163,6 +213,7 @@ function Header() {
             <Icon name="back" size={20} />
           </button>
         )}
+        <MobileMenu onWorks={onWorks} />
         <h1 className="Header-title">
           <Link to="/">
             <img className="Header-logo" src="/logo.png" alt="" width={30} height={30} />
@@ -184,7 +235,7 @@ function Header() {
           </form>
           <a
             className="Button Button--flat Button--icon Header-github"
-            href="https://github.com/hachimlab/yesmiao"
+            href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
             title="GitHub 仓库"
