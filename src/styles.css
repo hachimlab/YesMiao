@@ -2093,11 +2093,16 @@ a.WorkStat:hover {
     --avatar-column-width: 0px;
     --post-padding: 15px;
   }
-  /* 手机顶栏只留搜索、铃铛和头像，Logo、板块切换、外观和 GitHub 收进汉堡菜单 */
-  .Header-title,
+  /* 手机顶栏只留文字 Logo、搜索、铃铛和头像，板块切换、外观和 GitHub 收进汉堡菜单 */
+  .Header-logo,
   .Header-switch,
   .Header-theme {
     display: none;
+  }
+  .Header-title {
+    flex-shrink: 0;
+    margin-right: 0;
+    font-size: 16px;
   }
   .Header-menu {
     display: block;
