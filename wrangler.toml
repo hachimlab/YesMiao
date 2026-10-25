@@ -1,0 +1,11 @@
+# Cloudflare Pages 项目配置。由 `wrangler pages download config yesmiao` 生成后补上 KV 绑定。
+# 有了这个文件，Pages 以它为准，面板里不能再改绑定和普通变量；密钥仍在面板或用 `wrangler pages secret put` 设置。
+name = "yesmiao"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-24"
+
+# GitHub 绑定关系：gh:{编程猫用户ID} -> { id, login, show, bound_at }，见 functions/api/[[path]].js
+# 写在顶层，预览部署和正式部署共用同一个命名空间
+[[kv_namespaces]]
+binding = "YM_KV"
+id = "2832882f38d548f5a7c3ae4d6b0d8b14"
