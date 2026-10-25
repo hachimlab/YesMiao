@@ -7,7 +7,7 @@ import { Icon, type IconName } from '../../components/icons';
 import { LoginForm } from '../../components/overlays';
 import { Avatar, Button, ListState, Loading, useLoadMore } from '../../components/ui';
 import { useAuthActions, useMe } from '../../lib/auth';
-import { timeAgo } from '../../lib/format';
+import { htmlToText, timeAgo } from '../../lib/format';
 import { UserHeader, UserNav } from '../user/UserPage';
 
 type Section = 'messages' | 'posts' | 'replied' | 'settings';
@@ -55,7 +55,9 @@ function NotificationItem({ m }: { m: Message }) {
     c = { message: { content: m.content } };
   }
   const msg = c.message || {};
-  const text = msg.reply || msg.comment || msg.comment_content || msg.content || msg.reason_name || '';
+  // 回帖、评论内容是 HTML（如 <p>…</p>），消息里只显示纯文本
+  const text = htmlToText(msg.reply || msg.comment || msg.comment_content || msg.content || msg.reason_name || '', 300);
+  const replied = msg.replied && htmlToText(msg.replied, 120);
   const link = businessLink(m.type, msg.business_id);
   return (
     <li className={`NotificationList-item${m.read_status === 'UNREAD' ? ' unread' : ''}`}>
@@ -77,7 +79,7 @@ function NotificationItem({ m }: { m: Message }) {
           )}
         </div>
         {text && <p>{text}</p>}
-        {msg.replied && <p>“{msg.replied}”</p>}
+        {replied && <p>“{replied}”</p>}
         <time>{timeAgo(m.created_at)}</time>
       </div>
     </li>

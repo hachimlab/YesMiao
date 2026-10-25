@@ -24,9 +24,9 @@ export function compactNumber(n: number | undefined): string {
 
 /** 帖子列表里的 content 是 HTML，摘要只取纯文本 */
 export function htmlToText(html: string, max = 120): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  const text = (div.textContent || '').replace(/\s+/g, ' ').trim();
+  // 用 DOMParser 解析：不会加载图片、不会触发 onerror 之类的内联脚本
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const text = (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
