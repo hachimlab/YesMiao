@@ -19,6 +19,8 @@ interface DevEnv {
   YM_KV: { get(key: string, type?: 'json'): Promise<unknown>; put(key: string, value: string): Promise<void>; delete(key: string): Promise<void> };
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  BANGUMI_CLIENT_ID?: string;
+  BANGUMI_CLIENT_SECRET?: string;
 }
 
 type PagesFunction = (context: { request: Request; env: DevEnv; waitUntil(p: Promise<unknown>): void }) => Promise<Response>;
@@ -50,9 +52,15 @@ function edgeProxy(): Plugin {
   return {
     name: 'yesmiao-edge-proxy',
     configureServer(server) {
-      // GitHub OAuth App 的 id 和 secret 写在 .env.local 里（已被 .gitignore 忽略）
-      const vars = loadEnv(server.config.mode, process.cwd(), 'GITHUB_');
-      const env: DevEnv = { YM_KV: memoryKV(), GITHUB_CLIENT_ID: vars.GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: vars.GITHUB_CLIENT_SECRET };
+      // GitHub、Bangumi OAuth 应用的 id 和 secret 写在 .env.local 里（已被 .gitignore 忽略）
+      const vars = loadEnv(server.config.mode, process.cwd(), ['GITHUB_', 'BANGUMI_']);
+      const env: DevEnv = {
+        YM_KV: memoryKV(),
+        GITHUB_CLIENT_ID: vars.GITHUB_CLIENT_ID,
+        GITHUB_CLIENT_SECRET: vars.GITHUB_CLIENT_SECRET,
+        BANGUMI_CLIENT_ID: vars.BANGUMI_CLIENT_ID,
+        BANGUMI_CLIENT_SECRET: vars.BANGUMI_CLIENT_SECRET,
+      };
       for (const [prefix, onRequest] of FUNCTIONS) {
         server.middlewares.use(prefix, async (req, res) => {
           const url = new URL(prefix + (req.url || ''), `http://${req.headers.host}`);

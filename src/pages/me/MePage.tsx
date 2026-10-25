@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ApiError, forum, github, me, users, type Message, type MessageType, type MyDetails, type Post } from '../../api';
+import { ApiError, bangumi, bangumiProfileUrl, forum, github, me, pickcat, PICKCAT_ID_RE, users, type Message, type MessageType, type MyDetails, type OAuthBinding, type OAuthProvider, type Post } from '../../api';
 import { DiscussionListItem } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
 import { LoginForm } from '../../components/overlays';
@@ -10,13 +10,14 @@ import { useAuthActions, useMe } from '../../lib/auth';
 import { htmlToText, timeAgo } from '../../lib/format';
 import { UserHeader, UserNav } from '../user/UserPage';
 
-type Section = 'messages' | 'posts' | 'replied' | 'settings';
+type Section = 'messages' | 'posts' | 'replied' | 'settings' | 'bindings';
 
 const SECTIONS: { value: Section; label: string; icon: IconName }[] = [
   { value: 'messages', label: '消息', icon: 'bell' },
   { value: 'posts', label: '我的讨论', icon: 'comment' },
   { value: 'replied', label: '我回复的', icon: 'reply' },
   { value: 'settings', label: '设置', icon: 'cog' },
+  { value: 'bindings', label: '绑定', icon: 'link' },
 ];
 
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
@@ -130,8 +131,8 @@ function MyDiscussions({ kind }: { kind: 'posts' | 'replied' }) {
   );
 }
 
-// 授权回调跳回设置页时带的 ?github=，见 functions/api 的 githubCallback
-const GITHUB_RESULTS: Record<string, string> = {
+// 授权回调跳回绑定页时带的 ?github= / ?bangumi=，见 functions/api 的 oauthCallback
+const OAUTH_RESULTS: Record<string, string> = {
   bound: '已绑定',
   denied: '已取消授权',
   expired: '授权已过期，请重新绑定',
@@ -139,26 +140,49 @@ const GITHUB_RESULTS: Record<string, string> = {
   error: '绑定失败，请稍后再试',
 };
 
-/** 编程猫没有第三方账号绑定，绑定关系存在本站，只用来在主页上显示 GitHub */
-function GithubSettings() {
+const OAUTH_UI: Record<
+  OAuthProvider,
+  { label: string; icon: IconName; client: typeof github; intro: string; profileUrl: (b: OAuthBinding) => string; display: (b: OAuthBinding) => string }
+> = {
+  github: {
+    label: 'GitHub',
+    icon: 'github',
+    client: github,
+    intro: '绑定后可以选择在主页显示 GitHub 账号。只读取公开的用户名，不申请任何权限。',
+    profileUrl: (b) => `https://github.com/${b.login}`,
+    display: (b) => b.login,
+  },
+  bangumi: {
+    label: 'Bangumi',
+    icon: 'tv',
+    client: bangumi,
+    intro: '绑定后可以选择在主页显示 Bangumi 番组计划账号。只读取用户名和昵称。',
+    profileUrl: (b) => bangumiProfileUrl(b.login),
+    display: (b) => (b.nickname && b.nickname !== b.login ? `${b.nickname}（@${b.login}）` : b.login),
+  },
+};
+
+/** 编程猫没有第三方账号绑定，绑定关系存在本站，只用来在主页上显示 */
+function OAuthSettings({ provider }: { provider: OAuthProvider }) {
+  const { label, icon, client, intro, profileUrl, display } = OAUTH_UI[provider];
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const [status, setStatus] = useState(() => GITHUB_RESULTS[params.get('github') || ''] || '');
-  // 绑定要整页跳去 GitHub 再回来，回来时 localStorage 里恢复的是跳走前"未绑定"的缓存，所以每次打开都重新请求
-  const mine = useQuery({ queryKey: ['github-me'], queryFn: github.mine, staleTime: 0 });
+  const [status, setStatus] = useState(() => OAUTH_RESULTS[params.get(provider) || ''] || '');
+  // 绑定要整页跳去授权页再回来，回来时 localStorage 里恢复的是跳走前"未绑定"的缓存，所以每次打开都重新请求
+  const mine = useQuery({ queryKey: [`${provider}-me`], queryFn: client.mine, staleTime: 0 });
   const binding = mine.data?.binding;
 
   // 提示读出来之后把参数去掉，刷新页面不再重复显示
   useEffect(() => {
-    if (params.has('github')) setParams((p) => (p.delete('github'), p), { replace: true });
-  }, [params, setParams]);
+    if (params.has(provider)) setParams((p) => (p.delete(provider), p), { replace: true });
+  }, [params, setParams, provider]);
 
   async function run(action: () => Promise<void>, done: string) {
     setStatus('保存中…');
     try {
       await action();
-      await qc.invalidateQueries({ queryKey: ['github-me'] });
-      await qc.invalidateQueries({ queryKey: ['github'] });
+      await qc.invalidateQueries({ queryKey: [`${provider}-me`] });
+      await qc.invalidateQueries({ queryKey: ['links'] });
       setStatus(done);
     } catch (err) {
       setStatus(err instanceof ApiError ? err.message : '保存失败');
@@ -167,13 +191,13 @@ function GithubSettings() {
 
   if (!mine.data?.configured) return null;
   return (
-    <div className="Form-group" style={{ marginTop: 24 }}>
-      <label>GitHub</label>
+    <div className="Form-group">
+      <label>{label}</label>
       {binding ? (
         <>
           <div>
-            <a href={`https://github.com/${binding.login}`} target="_blank" rel="noopener noreferrer">
-              <Icon name="github" /> {binding.login}
+            <a href={profileUrl(binding)} target="_blank" rel="noopener noreferrer">
+              <Icon name={icon} /> {display(binding)}
             </a>
           </div>
           {/* 包一层 div：.Form-group > label 会把开关也变成粗体的块级标题 */}
@@ -185,17 +209,17 @@ function GithubSettings() {
                 checked={binding.show}
                 onChange={(e) => {
                   const show = e.target.checked;
-                  run(() => github.setVisible(show), show ? '已在主页显示' : '已从主页隐藏');
+                  run(() => client.setVisible(show), show ? '已在主页显示' : '已从主页隐藏');
                 }}
               />
               在我的主页显示
             </label>
           </div>
           <div>
-            <a className="Button" href={github.startUrl}>
+            <a className="Button" href={client.startUrl}>
               <span className="Button-label">重新绑定</span>
             </a>{' '}
-            <Button type="button" onClick={() => run(github.unbind, '已解绑')}>
+            <Button type="button" onClick={() => run(client.unbind, '已解绑')}>
               解绑
             </Button>
           </div>
@@ -203,16 +227,81 @@ function GithubSettings() {
       ) : (
         <>
           <p className="muted" style={{ margin: '0 0 10px' }}>
-            绑定后可以选择在主页显示 GitHub 账号。只读取公开的用户名，不申请任何权限。
+            {intro}
           </p>
-          <a className="Button" href={github.startUrl}>
-            <Icon name="github" />
-            <span className="Button-label">绑定 GitHub</span>
+          <a className="Button" href={client.startUrl}>
+            <Icon name={icon} />
+            <span className="Button-label">绑定 {label}</span>
           </a>
         </>
       )}
       {status && <div className="muted" style={{ marginTop: 8 }}>{status}</div>}
     </div>
+  );
+}
+
+/** Pickcat 没有开放登录，用户自己填用户 ID，填了就在主页显示链接 */
+function PickcatSettings() {
+  const qc = useQueryClient();
+  const mine = useQuery({ queryKey: ['pickcat-me'], queryFn: pickcat.mine });
+  const saved = mine.data?.id ?? null;
+  const [draft, setDraft] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
+  const value = draft ?? saved ?? '';
+
+  async function save(id: string) {
+    if (id && !PICKCAT_ID_RE.test(id)) return setStatus('用户 ID 格式不对，应为 UUID，例如 123e4567-e89b-12d3-a456-426614174000');
+    setStatus('保存中…');
+    try {
+      const res = await pickcat.save(id);
+      qc.setQueryData(['pickcat-me'], res);
+      await qc.invalidateQueries({ queryKey: ['links'] });
+      setDraft(null);
+      setStatus(id ? '已保存，主页会显示 Pickcat 链接' : '已解绑');
+    } catch (err) {
+      setStatus(err instanceof ApiError ? err.message : '保存失败');
+    }
+  }
+
+  if (!mine.data?.configured) return null;
+  return (
+    <form
+      className="Form-group"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save(value.trim());
+      }}
+    >
+      <label htmlFor="pickcat-id">Pickcat</label>
+      <p className="muted" style={{ margin: '0 0 10px' }}>
+        填写你的 Pickcat 用户 ID，主页上会显示指向你 Pickcat 主页的链接。用户 ID 是 Pickcat 个人主页网址 /profile/ 后面那一串。
+      </p>
+      <input
+        id="pickcat-id"
+        className="FormControl"
+        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        spellCheck={false}
+        autoComplete="off"
+        value={value}
+        onChange={(e) => setDraft(e.target.value)}
+      />
+      <div style={{ marginTop: 10 }}>
+        <Button type="submit" disabled={value.trim() === (saved ?? '')}>
+          保存
+        </Button>{' '}
+        {saved && (
+          <>
+            <a className="Button" href={pickcat.profileUrl(saved)} target="_blank" rel="noopener noreferrer">
+              <span className="Button-label">打开主页</span>
+            </a>{' '}
+            <Button type="button" onClick={() => save('')}>
+              解绑
+            </Button>
+          </>
+        )}
+      </div>
+      {status && <div className="muted" style={{ marginTop: 8 }}>{status}</div>}
+    </form>
   );
 }
 
@@ -260,10 +349,23 @@ function Settings({ user }: { user: MyDetails }) {
         </Button>
         {status && <span className="muted" style={{ marginLeft: 12 }}>{status}</span>}
       </form>
-      <GithubSettings />
       <p className="muted" style={{ marginTop: 24 }}>
         主题色、字号、背景图、屏蔽等外观选项在 <Link to="/settings">外观设置</Link> 里，不需要登录。
       </p>
+    </div>
+  );
+}
+
+/** 外部账号绑定：编程猫没有这个功能，存在本站，只用来在主页资料头显示链接 */
+function Bindings() {
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        绑定的账号会显示在你的主页上。这些数据存在 YesMiao，不是编程猫的功能，官方页面上看不到。
+      </p>
+      <OAuthSettings provider="github" />
+      <OAuthSettings provider="bangumi" />
+      <PickcatSettings />
     </div>
   );
 }
@@ -316,6 +418,7 @@ export default function MePage() {
         {section === 'posts' && <MyDiscussions kind="posts" />}
         {section === 'replied' && <MyDiscussions kind="replied" />}
         {section === 'settings' && <Settings user={user} />}
+        {section === 'bindings' && <Bindings />}
       </div>
     </div>
   );

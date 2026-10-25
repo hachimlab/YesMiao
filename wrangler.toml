@@ -4,7 +4,7 @@ name = "yesmiao"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-24"
 
-# GitHub 绑定关系：gh:{编程猫用户ID} -> { id, login, show, bound_at }，见 functions/api/[[path]].js
+# 主页上的外部账号：gh: / bgm: / pc:{编程猫用户ID} -> GitHub、Bangumi、Pickcat 绑定，见 functions/api/[[path]].js
 # 写在顶层，预览部署和正式部署共用同一个命名空间
 [[kv_namespaces]]
 binding = "YM_KV"

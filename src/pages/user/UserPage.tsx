@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, useParams } from 'react-router-dom';
-import { github, userdb, users, type FollowUser, type Paged, type UserHonor, type WorkCardData } from '../../api';
+import { bangumiProfileUrl, links, pickcat, userdb, users, type FollowUser, type Paged, type UserHonor, type WorkCardData } from '../../api';
 import { UserList, WorkGrid } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
 import { Avatar, Button, ErrorBox, ListState, Loading, RssButton, useLoadMore } from '../../components/ui';
@@ -46,16 +46,31 @@ function BlockButton({ honor }: { honor: UserHonor }) {
   );
 }
 
-/** 用户在本站绑定并选择公开的 GitHub 账号（不是编程猫的数据） */
-function GithubLink({ userId }: { userId: number }) {
-  const q = useQuery({ queryKey: ['github', String(userId)], queryFn: () => github.user(String(userId)), staleTime: 5 * 60_000 });
-  const login = q.data?.login;
-  if (!login) return null;
+/** 用户在本站绑定并选择公开的外部账号（不是编程猫的数据） */
+function ProfileLinks({ userId }: { userId: number }) {
+  const q = useQuery({ queryKey: ['links', String(userId)], queryFn: () => links.user(String(userId)), staleTime: 5 * 60_000 });
+  const { github, bangumi, pickcat: pickcatId } = q.data ?? {};
   return (
-    <a className="UserHeader-github" href={`https://github.com/${login}`} target="_blank" rel="noopener noreferrer" title="GitHub">
-      <Icon name="github" />
-      {login}
-    </a>
+    <>
+      {github && (
+        <a className="UserHeader-link" href={`https://github.com/${github}`} target="_blank" rel="noopener noreferrer" title="GitHub">
+          <Icon name="github" />
+          {github}
+        </a>
+      )}
+      {bangumi && (
+        <a className="UserHeader-link" href={bangumiProfileUrl(bangumi.username)} target="_blank" rel="noopener noreferrer" title="Bangumi">
+          <Icon name="tv" />
+          {bangumi.nickname}
+        </a>
+      )}
+      {pickcatId && (
+        <a className="UserHeader-link" href={pickcat.profileUrl(pickcatId)} target="_blank" rel="noopener noreferrer" title="Pickcat 主页">
+          <Icon name="link" />
+          Pickcat
+        </a>
+      )}
+    </>
   );
 }
 
@@ -79,7 +94,7 @@ export function UserHeader({ honor, actions }: { honor: UserHonor; actions?: Rea
             {honor.is_official_certification ? <span className="Badge Badge--author">官方认证</span> : null}
             {honor.author_level ? <span className="Badge Badge--author">Lv{honor.author_level}</span> : null}
             {honor.work_shop_name && <span>工作室：{honor.work_shop_name}</span>}
-            <GithubLink userId={honor.user_id} />
+            <ProfileLinks userId={honor.user_id} />
           </div>
           {honor.user_description && <p className="UserHeader-bio">{honor.user_description}</p>}
         </div>

@@ -12,7 +12,7 @@
 | 作品 | 发现页（精选/热门/最多点击/最新）、作品详情（内嵌官方播放器运行）、作品介绍与操作说明、标签、评论与回复、点赞、收藏、相关作品 |
 | 用户 | 用户主页（作品/收藏/粉丝/关注）、关注 |
 | 搜索 | 讨论（按标题）、作品（按作品名）、用户（按昵称，数据来自 [CodemaoUserDB](https://github.com/hachimlab/UserDB)） |
-| 个人中心 | 登录、消息（评论回复/赞/系统）、我的帖子、我回复的、修改昵称和简介、绑定 GitHub（可选在主页显示） |
+| 个人中心 | 登录、消息（评论回复/赞/系统）、我的帖子、我回复的、修改昵称和简介、绑定 GitHub / Bangumi（可选在主页显示）、填写 Pickcat 用户 ID（在主页显示链接） |
 | 外观设置 | 浅色/深色/跟随系统、主题色、正文字号/行距/衬线、显示密度、圆角、作品布局、背景图、毛玻璃顶栏、动效、隐藏头像和计数、屏蔽用户和关键词、自定义 CSS（网址加 `?nostyle` 进安全模式）、导入导出。只存在本机浏览器，不需要登录 |
 | RSS | 全站精选、求助、各板块最新/精选、用户作品、最新作品。对应页面的工具栏上有 RSS 按钮，点击复制订阅地址，浏览器的 RSS 扩展也能自动发现 |
 | PWA | 可安装到桌面/主屏幕（独立窗口、顶栏补返回键、适配刘海屏）；页面骨架和代码预缓存，秒开、断网也能看之前浏览过的内容；发新版后提示刷新 |
@@ -50,24 +50,33 @@ public/_headers                    静态资源的缓存头（Cloudflare Pages�
 
 编程猫没有按昵称找人的接口，用户搜索调用 HachimLab 的 [CodemaoUserDB](https://github.com/hachimlab/UserDB)（`udbapi.hachimlab.top`，允许跨域，浏览器直接请求，不经过代理）。和它的油猴插件一样，打开用户主页时会把该用户同步进库（同一用户 10 分钟一次），让更多人能被搜到。
 
-## GitHub 绑定
+## 外部账号绑定（GitHub、Bangumi、Pickcat）
 
-编程猫没有第三方账号绑定，绑定关系存在本站的 Cloudflare KV 里（`gh:{编程猫用户ID}` → GitHub 数字 ID、用户名、是否在主页显示），只用来在用户主页显示 GitHub 账号。
+编程猫没有第三方账号绑定，绑定关系存在本站的 Cloudflare KV 里，只用来在用户主页的资料头显示链接。入口在「个人中心 → 绑定」（`/me/bindings`）。
+
+| KV 键 | 值 | 身份确认 |
+| --- | --- | --- |
+| `gh:{编程猫用户ID}` | GitHub 数字 ID、用户名、是否在主页显示 | OAuth 授权，不申请任何 scope；换到的 access token 只读一次 `/user`，用完即丢 |
+| `bgm:{编程猫用户ID}` | Bangumi 数字 ID、username、昵称、是否在主页显示 | OAuth 授权（[文档](https://github.com/bangumi/api/blob/master/docs-raw/How-to-Auth.md)）；access token 只读一次 `/v0/me`，用完即丢；主页链接 `https://bgm.tv/user/{username}` |
+| `pc:{编程猫用户ID}` | Pickcat 用户 ID（UUID） | 用户自己填，只检查格式，不验证是不是本人；链接到 `https://pickcat.dao3.fun/profile/{id}` |
 
 - 编程猫身份：代理用 httpOnly cookie 里的登录 token 向 `/web/users/details` 查询，不信任前端传来的用户 ID
-- GitHub 身份：OAuth 授权，不申请任何 scope；换到的 access token 只读一次 `/user`，用完即丢
-- 绑定后默认不显示，用户在「个人中心 → 设置」里打开「在我的主页显示」
-- 公开查询 `/api/_github/u/{用户ID}` 在边缘缓存 5 分钟；绑定、解绑、切换显示时删掉本机房的缓存
-- 没有配置 KV 或 OAuth App 时，设置页不显示这一块，主页也不查
+- GitHub、Bangumi 走同一套代码，差别写在 `functions/api/[[path]].js` 的 `OAUTH_PROVIDERS` 里；请求 Bangumi 时带 `hachimlab/yesmiao (…)` 的 User-Agent（[Bangumi 的要求](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）
+- OAuth 绑定后默认不显示，用户自己打开「在我的主页显示」；重新绑定保留原来的设置。Pickcat 填了就显示，清空即解绑
+- 公开查询 `/api/_links/u/{用户ID}` 在边缘缓存 5 分钟；任何修改都删掉本机房的缓存
+- 没有配置 KV 时整页都不显示；GitHub、Bangumi 各自配了 OAuth 应用才显示
 
 | 接口 | 作用 |
 | --- | --- |
-| `GET /api/_github/start` | 跳转到 GitHub 授权页 |
-| `GET /api/_github/callback` | 授权回调，确认两边身份后写入 KV，跳回设置页 |
-| `GET /api/_github/me` | 当前用户的绑定（需登录） |
-| `POST /api/_github/visibility` | 切换是否在主页显示（需登录） |
-| `POST /api/_github/unbind` | 解绑（需登录） |
-| `GET /api/_github/u/{用户ID}` | 公开查询，只在用户选择显示时返回 GitHub 用户名 |
+| `GET /api/_links/u/{用户ID}` | 公开查询，返回 `{ github, bangumi, pickcat }`，OAuth 的只在用户选择显示时返回 |
+| `GET /api/_{github,bangumi}/start` | 跳转到对方的授权页 |
+| `GET /api/_{github,bangumi}/callback` | 授权回调，确认两边身份后写入 KV，跳回 `/me/bindings?{github,bangumi}=结果` |
+| `GET /api/_{github,bangumi}/me` | 当前用户的绑定（需登录） |
+| `POST /api/_{github,bangumi}/visibility` | 切换是否在主页显示（需登录） |
+| `POST /api/_{github,bangumi}/unbind` | 解绑（需登录） |
+| `GET /api/_github/u/{用户ID}` | 旧版前端用的 GitHub 公开查询，保留兼容 |
+| `GET /api/_pickcat/me` | 当前用户填的 Pickcat 用户 ID（需登录） |
+| `POST /api/_pickcat/me` | 保存 Pickcat 用户 ID，`{ "id": "" }` 为解绑（需登录） |
 
 ## 本地开发
 
@@ -81,7 +90,7 @@ npm run dev
 
 开发服务器会直接调用 `functions/api/[[path]].js`，行为与线上一致（本地没有边缘缓存）。
 
-本地调试 GitHub 绑定：另建一个回调地址为 `http://localhost:5173/api/_github/callback` 的 OAuth App，把 id 和 secret 写进 `.env.local`（`GITHUB_CLIENT_ID=…`、`GITHUB_CLIENT_SECRET=…`）。本地用内存代替 KV，重启 dev server 后绑定会清空。
+本地调试 OAuth 绑定：另建回调地址为 `http://localhost:5173/api/_github/callback`（Bangumi 是 `/api/_bangumi/callback`）的应用，把 id 和 secret 写进 `.env.local`（`GITHUB_CLIENT_ID=…`、`GITHUB_CLIENT_SECRET=…`、`BANGUMI_CLIENT_ID=…`、`BANGUMI_CLIENT_SECRET=…`）。本地用内存代替 KV，重启 dev server 后绑定会清空。
 
 > npm 10.8 在解析 peer 依赖时有 bug，仓库里的 `.npmrc` 已设置 `legacy-peer-deps=true` 绕过。
 
@@ -89,9 +98,7 @@ npm run dev
 
 1. 在 Cloudflare Pages 导入本仓库，构建命令 `npm run build`，输出目录 `dist`
 2. `functions/` 目录会被自动识别为 Pages Functions，`/api/*` 由它转发；SPA 路由回退由 Pages 自动处理（`dist` 里没有 404.html）
-3. GitHub 绑定（可选）：
-   - 在 GitHub → Settings → Developer settings → OAuth Apps 新建应用，Authorization callback URL 填 `https://你的域名/api/_github/callback`
-   - Pages 项目 → 设置 → 绑定：添加 KV 命名空间，变量名 `YM_KV`
-   - Pages 项目 → 设置 → 变量和机密：添加 `GITHUB_CLIENT_ID`，以及类型为「密钥」的 `GITHUB_CLIENT_SECRET`
-   - 重新部署后生效
+3. 外部账号绑定（可选）：KV 是共用的，`wrangler.toml` 里已经绑好。OAuth 应用的 id 和 secret 都设成密钥（有了 `wrangler.toml` 后面板里不能加普通变量），比如 `wrangler pages secret put GITHUB_CLIENT_ID --project-name yesmiao`，设完重新部署：
+   - GitHub：Settings → Developer settings → OAuth Apps 新建应用，Authorization callback URL 填 `https://你的域名/api/_github/callback`；密钥 `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`
+   - Bangumi：在 <https://bgm.tv/dev/app> 新建应用，回调地址填 `https://你的域名/api/_bangumi/callback`；密钥 `BANGUMI_CLIENT_ID`（App ID）、`BANGUMI_CLIENT_SECRET`（App Secret）
 4. 国内访问较慢，见 [docs/research.md](docs/research.md) 的托管平台对比

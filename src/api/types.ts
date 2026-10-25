@@ -220,9 +220,12 @@ export interface Message {
   created_at: number;
 }
 
-/** 本站 KV 里存的 GitHub 绑定，id 是 GitHub 的数字用户 ID（用户名可以改，id 不变） */
-export interface GithubBinding {
+/** 本站 KV 里存的 OAuth 绑定（GitHub、Bangumi），id 是对方的数字用户 ID（用户名可以改，id 不变） */
+export interface OAuthBinding {
   id: number;
+  /** GitHub 的 login、Bangumi 的 username，用来拼主页链接 */
   login: string;
+  /** 只有 Bangumi 有 */
+  nickname?: string;
   show: boolean;
 }

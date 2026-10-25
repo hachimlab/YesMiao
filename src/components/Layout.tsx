@@ -168,6 +168,11 @@ function SessionDropdown() {
             </Link>
           </li>
           <li>
+            <Link to="/me/bindings">
+              <Icon name="link" /> 账号绑定
+            </Link>
+          </li>
+          <li>
             <Link to="/settings">
               <Icon name="brush" /> 外观设置
             </Link>

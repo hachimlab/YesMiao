@@ -4,10 +4,10 @@ import type {
   CollectedWork,
   FollowUser,
   ForumComment,
-  GithubBinding,
   Message,
   MyDetails,
   Notice,
+  OAuthBinding,
   Paged,
   Post,
   Reply,
@@ -225,13 +225,39 @@ export const me = {
     api<Paged<Message>>('/web/message-record', { query: { query_type: type, offset: (page - 1) * 10, limit: 10 } }),
 };
 
-/* ---------- GitHub 绑定（存在本站 KV 里，不是编程猫的功能） ---------- */
+/* ---------- 主页上的外部账号（存在本站 KV 里，不是编程猫的功能） ---------- */
 
-export const github = {
-  /** 浏览器整页跳过去，由代理重定向到 GitHub 授权页 */
-  startUrl: '/api/_github/start',
-  mine: () => api<{ configured: boolean; binding: GithubBinding | null }>('/_github/me'),
-  setVisible: (show: boolean) => api<void>('/_github/visibility', { method: 'POST', body: { show } }),
-  unbind: () => api<void>('/_github/unbind', { method: 'POST', body: {} }),
-  user: (id: string) => api<{ login: string | null }>(`/_github/u/${id}`),
+/** 用户选择公开的外部账号，没有就是 null */
+export const links = {
+  user: (id: string) =>
+    api<{ github: string | null; bangumi: { username: string; nickname: string } | null; pickcat: string | null }>(
+      `/_links/u/${id}`,
+    ),
+};
+
+export type OAuthProvider = 'github' | 'bangumi';
+
+/** GitHub、Bangumi 走同一套 OAuth 绑定接口，见 functions/api 的 OAUTH_PROVIDERS */
+function oauthClient(name: OAuthProvider) {
+  return {
+    /** 浏览器整页跳过去，由代理重定向到对方的授权页 */
+    startUrl: `/api/_${name}/start`,
+    mine: () => api<{ configured: boolean; binding: OAuthBinding | null }>(`/_${name}/me`),
+    setVisible: (show: boolean) => api<void>(`/_${name}/visibility`, { method: 'POST', body: { show } }),
+    unbind: () => api<void>(`/_${name}/unbind`, { method: 'POST', body: {} }),
+  };
+}
+
+export const github = oauthClient('github');
+export const bangumi = oauthClient('bangumi');
+export const bangumiProfileUrl = (username: string) => `https://bgm.tv/user/${username}`;
+
+export const PICKCAT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Pickcat 没有开放登录，用户自己填用户 ID（UUID），不验证是不是本人 */
+export const pickcat = {
+  profileUrl: (id: string) => `https://pickcat.dao3.fun/profile/${id}`,
+  mine: () => api<{ configured: boolean; id: string | null }>('/_pickcat/me'),
+  /** 传空字符串就是解绑 */
+  save: (id: string) => api<{ configured: boolean; id: string | null }>('/_pickcat/me', { method: 'POST', body: { id } }),
 };
