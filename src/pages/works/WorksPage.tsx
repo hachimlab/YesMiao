@@ -2,7 +2,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { works, type Paged, type WorkCardData } from '../../api';
 import { WorkGrid } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
-import { Button, ListState, SideNav, useLoadMore } from '../../components/ui';
+import { Button, ListState, RssButton, SideNav, useLoadMore } from '../../components/ui';
 import { updateAppearance, useAppearance, WORK_VIEWS } from '../../lib/appearance';
 
 type Feed = 'featured' | 'hot' | 'views' | 'newest';
@@ -72,6 +72,7 @@ export default function WorksPage() {
                     />
                   ))}
                 </div>
+                {feed === 'newest' && <RssButton path="/rss/works.xml" title="YesMiao · 最新作品" />}
                 <Button icon="refresh" title="刷新" onClick={() => list.refetch()} disabled={list.isRefetching} />
               </div>
             </div>

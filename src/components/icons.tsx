@@ -41,6 +41,7 @@ const PATHS = {
   rows: 'M3 4h6v6H3zM3 14h6v6H3zM12 6h9M12 9h5M12 16h9M12 19h5',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
   upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+  rss: 'M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

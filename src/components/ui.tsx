@@ -104,6 +104,41 @@ export function Button({
   );
 }
 
+/**
+ * RSS 订阅：点击复制订阅地址（复制不了就弹窗显示），同时在 <head> 里登记 alternate 链接，
+ * 浏览器的 RSS 扩展能自动发现。path 是 functions/rss 下的地址，比如 /rss/t/2.xml
+ */
+export function RssButton({ path, title }: { path: string; title: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = location.origin + path;
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'alternate';
+    link.type = 'application/rss+xml';
+    link.title = title;
+    link.href = url;
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, [url, title]);
+  return (
+    <Button
+      icon={copied ? 'check' : 'rss'}
+      title="复制 RSS 订阅地址"
+      aria-label="复制 RSS 订阅地址"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          window.prompt('RSS 订阅地址，复制到阅读器里订阅', url);
+          return;
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    />
+  );
+}
+
 /* ---------- 状态 ---------- */
 
 export function Loading() {

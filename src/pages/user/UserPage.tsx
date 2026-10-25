@@ -4,7 +4,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { userdb, users, type FollowUser, type Paged, type UserHonor, type WorkCardData } from '../../api';
 import { UserList, WorkGrid } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
-import { Avatar, Button, ErrorBox, ListState, Loading, useLoadMore } from '../../components/ui';
+import { Avatar, Button, ErrorBox, ListState, Loading, RssButton, useLoadMore } from '../../components/ui';
 import { blockUser, unblockUser, useBlocklist } from '../../lib/appearance';
 import { useMe } from '../../lib/auth';
 import { compactNumber } from '../../lib/format';
@@ -74,6 +74,7 @@ export function UserHeader({ honor, actions }: { honor: UserHonor; actions?: Rea
             <>
               <FollowButton honor={honor} />
               <BlockButton honor={honor} />
+              <RssButton path={`/rss/u/${honor.user_id}.xml`} title={`YesMiao · ${honor.nickname} 的作品`} />
             </>
           )}
         </div>

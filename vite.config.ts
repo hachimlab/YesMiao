@@ -6,7 +6,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 本地开发直接复用线上的 Pages Function，保证行为一致
-import { onRequest } from './functions/api/[[path]].js';
+import { onRequest as apiFunction } from './functions/api/[[path]].js';
+import { onRequest as rssFunction } from './functions/rss/[[path]].js';
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -14,25 +15,34 @@ async function readBody(req: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+type PagesFunction = (context: { request: Request }) => Promise<Response>;
+
+const FUNCTIONS: [string, PagesFunction][] = [
+  ['/api', apiFunction],
+  ['/rss', rssFunction],
+];
+
 function edgeProxy(): Plugin {
   return {
     name: 'yesmiao-edge-proxy',
     configureServer(server) {
-      server.middlewares.use('/api', async (req, res) => {
-        const url = new URL('/api' + (req.url || ''), `http://${req.headers.host}`);
-        const headers = new Headers();
-        for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
-        const hasBody = !['GET', 'HEAD'].includes(req.method || 'GET');
-        const request = new Request(url, {
-          method: req.method,
-          headers,
-          body: hasBody ? new Uint8Array(await readBody(req)) : undefined,
+      for (const [prefix, onRequest] of FUNCTIONS) {
+        server.middlewares.use(prefix, async (req, res) => {
+          const url = new URL(prefix + (req.url || ''), `http://${req.headers.host}`);
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
+          const hasBody = !['GET', 'HEAD'].includes(req.method || 'GET');
+          const request = new Request(url, {
+            method: req.method,
+            headers,
+            body: hasBody ? new Uint8Array(await readBody(req)) : undefined,
+          });
+          const response: Response = await onRequest({ request });
+          res.statusCode = response.status;
+          response.headers.forEach((v, k) => res.setHeader(k, v));
+          res.end(Buffer.from(await response.arrayBuffer()));
         });
-        const response: Response = await onRequest({ request });
-        res.statusCode = response.status;
-        response.headers.forEach((v, k) => res.setHeader(k, v));
-        res.end(Buffer.from(await response.arrayBuffer()));
-      });
+      }
     },
   };
 }

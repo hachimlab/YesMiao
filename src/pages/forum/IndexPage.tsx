@@ -4,7 +4,7 @@ import { forum, type Board, type Post } from '../../api';
 import { DiscussionListItem } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
 import { useOverlays } from '../../components/overlays';
-import { Button, ListState, SideNav, boardColor, textToHtml, useLoadMore } from '../../components/ui';
+import { Button, ListState, RssButton, SideNav, boardColor, textToHtml, useLoadMore } from '../../components/ui';
 import { RULES } from '../../lib/limits';
 
 type Feed = 'hot' | 'selection' | 'help' | 'latest';
@@ -69,6 +69,17 @@ export function IndexSidebar({ boardId, feed }: { boardId?: string; feed?: Feed 
   );
 }
 
+/** 热门是按热度排的 ID 列表，不适合做成按时间更新的订阅源 */
+function rssFeed(feed: Feed, board?: { id: string; name: string }): { path: string; title: string } | undefined {
+  if (board) {
+    return feed === 'selection'
+      ? { path: `/rss/t/${board.id}/featured.xml`, title: `${board.name} · 精选` }
+      : { path: `/rss/t/${board.id}.xml`, title: board.name };
+  }
+  if (feed === 'selection') return { path: '/rss/featured.xml', title: '全站精选' };
+  if (feed === 'help') return { path: '/rss/help.xml', title: '求助' };
+}
+
 function fetchFeed(feed: Feed, page: number, boardId: string | undefined, hotIds: () => Promise<string[]>) {
   if (boardId) return feed === 'selection' ? forum.selections(page, boardId) : forum.boardPosts(boardId, page);
   if (feed === 'selection') return forum.selections(page);
@@ -88,6 +99,8 @@ export default function IndexPage() {
 
   const hotIds = () => qc.fetchQuery({ queryKey: ['hot-ids'], queryFn: forum.hotIds, staleTime: 300_000 });
   const list = useLoadMore<Post>(['discussions', boardId ?? 'home', feed], (page) => fetchFeed(feed, page, boardId, hotIds));
+  const boardName = boardDetail.data?.name ?? board?.name;
+  const rss = boardId ? (boardName ? rssFeed(feed, { id: boardId, name: boardName }) : undefined) : rssFeed(feed);
 
   return (
     <div className="IndexPage">
@@ -110,6 +123,7 @@ export default function IndexPage() {
                 <span className="muted">{HOME_FEEDS.find((f) => f.value === feed)?.label}</span>
               )}
               <div className="IndexPage-toolbar-action">
+                {rss && <RssButton path={rss.path} title={`YesMiao · ${rss.title}`} />}
                 <Button icon="refresh" title="刷新" onClick={() => list.refetch()} disabled={list.isRefetching} />
               </div>
             </div>
