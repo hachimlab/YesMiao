@@ -20,6 +20,8 @@
   --overlay-bg: rgba(77, 105, 142, 0.9);
   --error-color: #d83e3e;
   --primary-hover: #43597a;
+  /* 主题色用作文字时的颜色；主题色太亮时（见下面的 data-accent-bright）单独加深，背景色不变 */
+  --primary-text: var(--primary-color);
   --like-color: #e0245e;
   --alert-bg: #fff2ae;
   --alert-color: #ad6c00;
@@ -189,11 +191,11 @@ ul {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--primary-color);
+  color: var(--primary-text);
 }
 .Header-back {
   margin-left: -10px;
-  color: var(--primary-color);
+  color: var(--primary-text);
 }
 /* 汉堡菜单只在手机上显示 */
 .Header-menu {
@@ -224,7 +226,7 @@ ul {
   text-decoration: none;
 }
 .Header-switch a.active {
-  color: var(--primary-color);
+  color: var(--primary-text);
   background: var(--control-bg);
 }
 .Header-secondary {
@@ -419,7 +421,7 @@ ul {
 }
 .Dropdown-menu .Dropdown-check {
   margin-left: auto;
-  color: var(--primary-color);
+  color: var(--primary-text);
 }
 .Dropdown-separator {
   margin: 6px 0;
@@ -2253,6 +2255,12 @@ a.WorkStat:hover {
   --control-color: color-mix(in oklab, var(--accent) 50%, #555);
   --control-body-bg-mix: color-mix(in oklab, var(--accent) 4%, #fff);
   --overlay-bg: color-mix(in srgb, color-mix(in oklab, var(--accent), #000 30%) 90%, transparent);
+}
+/* 黄、橙这类亮色在白底上当文字太淡：浅色模式下文字、链接和控件文字加深，按钮背景仍用原色 */
+:root[data-accent-bright]:not([data-theme='dark']) {
+  --primary-text: color-mix(in oklab, var(--accent), #000 40%);
+  --link-color: color-mix(in oklab, var(--accent), #000 40%);
+  --control-color: color-mix(in oklab, var(--accent) 35%, #444);
 }
 :root[data-accent][data-theme='dark'] {
   --primary-color: color-mix(in oklab, var(--accent), #000 12%);

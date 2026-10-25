@@ -4,6 +4,7 @@ import { Icon, type IconName } from '../../components/icons';
 import { Avatar, Button, PostAction, SideNav } from '../../components/ui';
 import {
   clearBackground,
+  DEFAULT_ACCENT,
   exportAppearance,
   importAppearance,
   resetAppearance,
@@ -28,7 +29,8 @@ const SECTIONS = [
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 
 const ACCENTS: { value: string | null; label: string; color: string }[] = [
-  { value: null, label: '默认灰蓝', color: '#4d698e' },
+  { value: null, label: '默认黄', color: DEFAULT_ACCENT },
+  { value: '#4d698e', label: '灰蓝', color: '#4d698e' },
   { value: '#2b7de9', label: '天蓝', color: '#2b7de9' },
   { value: '#14a3a3', label: '青绿', color: '#14a3a3' },
   { value: '#2f9e6e', label: '薄荷绿', color: '#2f9e6e' },
@@ -140,7 +142,7 @@ function ThemeSection({ s }: { s: Appearance }) {
             />
           ))}
           <label className={`Swatch Swatch--custom${custom ? ' active' : ''}`} title="自定义颜色" style={custom ? { background: s.accent! } : undefined}>
-            <input type="color" value={s.accent ?? '#4d698e'} aria-label="自定义颜色" onChange={(e) => updateAppearance({ accent: e.target.value })} />
+            <input type="color" value={s.accent ?? DEFAULT_ACCENT} aria-label="自定义颜色" onChange={(e) => updateAppearance({ accent: e.target.value })} />
           </label>
         </div>
       </Row>

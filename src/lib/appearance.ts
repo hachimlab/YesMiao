@@ -21,7 +21,7 @@ export interface BlockedUser {
 
 export interface Appearance {
   theme: ThemeMode;
-  /** null 表示默认的灰蓝色 */
+  /** null 表示默认主题色 DEFAULT_ACCENT */
   accent: string | null;
   fontSize: FontSize;
   /** null 表示各处用自己的默认行距 */
@@ -59,6 +59,9 @@ const boot = window.YesMiaoAppearance;
 
 /** 是否处于 ?nostyle 安全模式（跳过自定义 CSS 和背景图） */
 export const safeMode = boot.safe;
+
+/** 默认主题色，index.html 的内联脚本里也写了一份 */
+export const DEFAULT_ACCENT = '#fec433';
 
 export const DEFAULTS: Appearance = {
   theme: 'auto',

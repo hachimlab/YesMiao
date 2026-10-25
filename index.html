@@ -94,10 +94,12 @@
           root.dataset.theme = theme;
           // 与 styles.css 里两套主题的 --body-bg 一致
           document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#16181b' : '#ffffff';
-          var accent = typeof s.accent === 'string' && /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : null;
-          attr('accent', !!accent);
+          // 没选过主题色时用默认的黄色（与 src/lib/appearance.ts 的 DEFAULT_ACCENT 一致），同样从 --accent 混出其余颜色
+          var accent = typeof s.accent === 'string' && /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : '#fec433';
+          attr('accent', true);
           prop('--accent', accent);
-          prop('--on-accent', accent && textOn(accent));
+          prop('--on-accent', textOn(accent));
+          attr('accent-bright', textOn(accent) === '#111');
           attr('font-size', s.fontSize !== 'md' && s.fontSize);
           prop('--post-line-height', s.lineHeight);
           attr('serif', !!s.serif);
