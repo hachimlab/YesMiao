@@ -144,7 +144,8 @@ function GithubSettings() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState(() => GITHUB_RESULTS[params.get('github') || ''] || '');
-  const mine = useQuery({ queryKey: ['github-me'], queryFn: github.mine });
+  // 绑定要整页跳去 GitHub 再回来，回来时 localStorage 里恢复的是跳走前"未绑定"的缓存，所以每次打开都重新请求
+  const mine = useQuery({ queryKey: ['github-me'], queryFn: github.mine, staleTime: 0 });
   const binding = mine.data?.binding;
 
   // 提示读出来之后把参数去掉，刷新页面不再重复显示
