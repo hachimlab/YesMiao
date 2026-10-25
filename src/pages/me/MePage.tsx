@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate, NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, forum, me, users, type Message, type MessageType, type MyDetails, type Post } from '../../api';
+import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ApiError, forum, github, me, users, type Message, type MessageType, type MyDetails, type Post } from '../../api';
 import { DiscussionListItem } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
 import { LoginForm } from '../../components/overlays';
@@ -130,6 +130,91 @@ function MyDiscussions({ kind }: { kind: 'posts' | 'replied' }) {
   );
 }
 
+// 授权回调跳回设置页时带的 ?github=，见 functions/api 的 githubCallback
+const GITHUB_RESULTS: Record<string, string> = {
+  bound: '已绑定',
+  denied: '已取消授权',
+  expired: '授权已过期，请重新绑定',
+  login: '登录已失效，请重新登录后再绑定',
+  error: '绑定失败，请稍后再试',
+};
+
+/** 编程猫没有第三方账号绑定，绑定关系存在本站，只用来在主页上显示 GitHub */
+function GithubSettings() {
+  const qc = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const [status, setStatus] = useState(() => GITHUB_RESULTS[params.get('github') || ''] || '');
+  const mine = useQuery({ queryKey: ['github-me'], queryFn: github.mine });
+  const binding = mine.data?.binding;
+
+  // 提示读出来之后把参数去掉，刷新页面不再重复显示
+  useEffect(() => {
+    if (params.has('github')) setParams((p) => (p.delete('github'), p), { replace: true });
+  }, [params, setParams]);
+
+  async function run(action: () => Promise<void>, done: string) {
+    setStatus('保存中…');
+    try {
+      await action();
+      await qc.invalidateQueries({ queryKey: ['github-me'] });
+      await qc.invalidateQueries({ queryKey: ['github'] });
+      setStatus(done);
+    } catch (err) {
+      setStatus(err instanceof ApiError ? err.message : '保存失败');
+    }
+  }
+
+  if (!mine.data?.configured) return null;
+  return (
+    <div className="Form-group" style={{ marginTop: 24 }}>
+      <label>GitHub</label>
+      {binding ? (
+        <>
+          <div>
+            <a href={`https://github.com/${binding.login}`} target="_blank" rel="noopener noreferrer">
+              <Icon name="github" /> {binding.login}
+            </a>
+          </div>
+          {/* 包一层 div：.Form-group > label 会把开关也变成粗体的块级标题 */}
+          <div style={{ margin: '10px 0' }}>
+            <label className="Switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={binding.show}
+                onChange={(e) => {
+                  const show = e.target.checked;
+                  run(() => github.setVisible(show), show ? '已在主页显示' : '已从主页隐藏');
+                }}
+              />
+              在我的主页显示
+            </label>
+          </div>
+          <div>
+            <a className="Button" href={github.startUrl}>
+              <span className="Button-label">重新绑定</span>
+            </a>{' '}
+            <Button type="button" onClick={() => run(github.unbind, '已解绑')}>
+              解绑
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted" style={{ margin: '0 0 10px' }}>
+            绑定后可以选择在主页显示 GitHub 账号。只读取公开的用户名，不申请任何权限。
+          </p>
+          <a className="Button" href={github.startUrl}>
+            <Icon name="github" />
+            <span className="Button-label">绑定 GitHub</span>
+          </a>
+        </>
+      )}
+      {status && <div className="muted" style={{ marginTop: 8 }}>{status}</div>}
+    </div>
+  );
+}
+
 function Settings({ user }: { user: MyDetails }) {
   const qc = useQueryClient();
   const [nickname, setNickname] = useState(user.nickname);
@@ -150,32 +235,35 @@ function Settings({ user }: { user: MyDetails }) {
   }
 
   return (
-    <form onSubmit={save} style={{ maxWidth: 480 }}>
-      <div className="Form-group">
-        <label>昵称</label>
-        <input className="FormControl" value={nickname} maxLength={20} onChange={(e) => setNickname(e.target.value)} />
-      </div>
-      <div className="Form-group">
-        <label>个人简介</label>
-        <textarea className="FormControl" rows={4} maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} />
-      </div>
-      <div className="Form-group">
-        <label>账号</label>
-        <div className="muted">
-          用户 ID：{user.id}
-          {user.username && <> · 用户名：{user.username}</>}
-          <br />
-          手机号：{user.phone_number || '未绑定（未绑定手机号无法发帖）'}
+    <div style={{ maxWidth: 480 }}>
+      <form onSubmit={save}>
+        <div className="Form-group">
+          <label>昵称</label>
+          <input className="FormControl" value={nickname} maxLength={20} onChange={(e) => setNickname(e.target.value)} />
         </div>
-      </div>
-      <Button variant="primary" type="submit">
-        保存修改
-      </Button>
-      {status && <span className="muted" style={{ marginLeft: 12 }}>{status}</span>}
+        <div className="Form-group">
+          <label>个人简介</label>
+          <textarea className="FormControl" rows={4} maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="Form-group">
+          <label>账号</label>
+          <div className="muted">
+            用户 ID：{user.id}
+            {user.username && <> · 用户名：{user.username}</>}
+            <br />
+            手机号：{user.phone_number || '未绑定（未绑定手机号无法发帖）'}
+          </div>
+        </div>
+        <Button variant="primary" type="submit">
+          保存修改
+        </Button>
+        {status && <span className="muted" style={{ marginLeft: 12 }}>{status}</span>}
+      </form>
+      <GithubSettings />
       <p className="muted" style={{ marginTop: 24 }}>
         主题色、字号、背景图、屏蔽等外观选项在 <Link to="/settings">外观设置</Link> 里，不需要登录。
       </p>
-    </form>
+    </div>
   );
 }
 

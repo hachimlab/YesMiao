@@ -219,3 +219,10 @@ export interface Message {
   read_status: 'READ' | 'UNREAD';
   created_at: number;
 }
+
+/** 本站 KV 里存的 GitHub 绑定，id 是 GitHub 的数字用户 ID（用户名可以改，id 不变） */
+export interface GithubBinding {
+  id: number;
+  login: string;
+  show: boolean;
+}

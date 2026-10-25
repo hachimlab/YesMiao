@@ -36,13 +36,17 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
-function readToken(request) {
+function readCookie(request, name) {
   const cookie = request.headers.get('cookie') || '';
   for (const part of cookie.split(';')) {
     const [k, ...v] = part.trim().split('=');
-    if (k === TOKEN_COOKIE) return decodeURIComponent(v.join('='));
+    if (k === name) return decodeURIComponent(v.join('='));
   }
   return '';
+}
+
+function readToken(request) {
+  return readCookie(request, TOKEN_COOKIE);
 }
 
 function tokenCookie(token, maxAge) {
@@ -133,6 +137,162 @@ async function proxy(request, path, search, context) {
   return out;
 }
 
+/* ---------- GitHub 绑定 ----------
+ * 编程猫没有第三方账号绑定，对应关系存在本站的 KV（绑定名 YM_KV）里：gh:{编程猫用户ID} -> { id, login, show, bound_at }。
+ * 两边身份都在服务端确认：编程猫用户 ID 用 httpOnly cookie 里的 token 向编程猫查，GitHub 账号走 OAuth。
+ * OAuth 不申请任何 scope，换到的 access token 只用来读一次 /user，用完即丢，不保存。
+ * 回调地址必须在 /api 下面，因为 ym_token 的 cookie 只在 /api 路径下发送。
+ */
+const GH_STATE_COOKIE = 'ym_gh_state';
+// 公开查询的结果在边缘缓存 5 分钟；绑定、解绑、切换显示时删掉本机房的缓存，自己马上能看到变化
+const GH_EDGE_TTL = 300;
+
+function githubConfigured(env) {
+  return !!(env && env.YM_KV && env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
+}
+
+function stateCookie(value, maxAge) {
+  return `${GH_STATE_COOKIE}=${value}; Path=/api/_github; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+function redirect(location, extraHeaders = {}) {
+  return new Response(null, { status: 302, headers: { Location: location, 'Cache-Control': 'no-store', ...extraHeaders } });
+}
+
+/** 用登录 token 向编程猫确认当前用户，没登录或 token 失效返回 '' */
+async function codemaoUserId(request) {
+  const token = readToken(request);
+  if (!token) return '';
+  const res = await fetch(`${UPSTREAM}/web/users/details`, { headers: upstreamHeaders(token) });
+  if (!res.ok) return '';
+  const data = await res.json().catch(() => null);
+  return data && data.id ? String(data.id) : '';
+}
+
+function githubCacheKey(userId) {
+  return new Request(`https://yesmiao.internal/github/${userId}`);
+}
+
+async function purgeGithubCache(context, userId) {
+  if (edgeCache) context.waitUntil(edgeCache.delete(githubCacheKey(userId)));
+}
+
+async function readBinding(env, userId) {
+  return (await env.YM_KV.get(`gh:${userId}`, 'json')) || null;
+}
+
+async function githubStart(request, env) {
+  const origin = new URL(request.url).origin;
+  if (!(await codemaoUserId(request))) return redirect(`${origin}/login`);
+  const state = crypto.randomUUID();
+  const authorize = new URL('https://github.com/login/oauth/authorize');
+  authorize.searchParams.set('client_id', env.GITHUB_CLIENT_ID);
+  authorize.searchParams.set('redirect_uri', `${origin}/api/_github/callback`);
+  authorize.searchParams.set('state', state);
+  authorize.searchParams.set('allow_signup', 'false');
+  return redirect(authorize.toString(), { 'Set-Cookie': stateCookie(state, 600) });
+}
+
+async function githubCallback(request, env, context) {
+  const url = new URL(request.url);
+  const back = (result) => redirect(`${url.origin}/me/settings?github=${result}`, { 'Set-Cookie': stateCookie('', 0) });
+  // 用户在 GitHub 上点了取消
+  if (url.searchParams.get('error')) return back('denied');
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  if (!code || !state || state !== readCookie(request, GH_STATE_COOKIE)) return back('expired');
+  const userId = await codemaoUserId(request);
+  if (!userId) return back('login');
+
+  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: env.GITHUB_CLIENT_ID,
+      client_secret: env.GITHUB_CLIENT_SECRET,
+      code,
+      redirect_uri: `${url.origin}/api/_github/callback`,
+    }),
+  });
+  const tokenData = await tokenRes.json().catch(() => null);
+  const accessToken = tokenData && tokenData.access_token;
+  if (!accessToken) return back('error');
+
+  const userRes = await fetch('https://api.github.com/user', {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${accessToken}`,
+      'User-Agent': 'YesMiao',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  const gh = await userRes.json().catch(() => null);
+  if (!userRes.ok || !gh || !gh.id || !gh.login) return back('error');
+
+  // 重新绑定时保留原来的显示设置；第一次绑定默认不显示，由用户自己打开
+  const old = await readBinding(env, userId);
+  await env.YM_KV.put(
+    `gh:${userId}`,
+    JSON.stringify({ id: gh.id, login: gh.login, show: old ? !!old.show : false, bound_at: Date.now() }),
+  );
+  await purgeGithubCache(context, userId);
+  return back('bound');
+}
+
+async function githubMine(request, env) {
+  if (!githubConfigured(env)) return json({ configured: false, binding: null });
+  const userId = await codemaoUserId(request);
+  if (!userId) return json({ error_message: '请先登录' }, 401);
+  return json({ configured: true, binding: await readBinding(env, userId) });
+}
+
+async function githubUpdate(request, env, context, action) {
+  const userId = await codemaoUserId(request);
+  if (!userId) return json({ error_message: '请先登录' }, 401);
+  if (action === 'unbind') {
+    await env.YM_KV.delete(`gh:${userId}`);
+  } else {
+    const body = await request.json().catch(() => ({}));
+    const binding = await readBinding(env, userId);
+    if (!binding) return json({ error_message: '还没有绑定 GitHub' }, 404);
+    await env.YM_KV.put(`gh:${userId}`, JSON.stringify({ ...binding, show: !!body.show }));
+  }
+  await purgeGithubCache(context, userId);
+  return json({ ok: true });
+}
+
+/** 公开查询：只有用户打开了"在主页显示"才返回 GitHub 用户名 */
+async function githubPublic(env, context, userId) {
+  if (!githubConfigured(env)) return json({ login: null });
+  const cacheKey = githubCacheKey(userId);
+  if (edgeCache) {
+    const hit = await edgeCache.match(cacheKey);
+    if (hit) return new Response(hit.body, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'HIT' } });
+  }
+  const binding = await readBinding(env, userId);
+  const out = json({ login: binding && binding.show ? binding.login : null });
+  if (edgeCache) {
+    const stored = out.clone();
+    stored.headers.set('Cache-Control', `public, max-age=${GH_EDGE_TTL}`);
+    context.waitUntil(edgeCache.put(cacheKey, stored));
+  }
+  return out;
+}
+
+async function github(request, path, context) {
+  const env = context.env || {};
+  const method = request.method;
+  if (path === '/_github/me' && method === 'GET') return githubMine(request, env);
+  const publicMatch = path.match(/^\/_github\/u\/(\d+)$/);
+  if (publicMatch && method === 'GET') return githubPublic(env, context, publicMatch[1]);
+  if (!githubConfigured(env)) return json({ error_message: '本站没有配置 GitHub 绑定' }, 503);
+  if (path === '/_github/start' && method === 'GET') return githubStart(request, env);
+  if (path === '/_github/callback' && method === 'GET') return githubCallback(request, env, context);
+  if (path === '/_github/visibility' && method === 'POST') return githubUpdate(request, env, context, 'visibility');
+  if (path === '/_github/unbind' && method === 'POST') return githubUpdate(request, env, context, 'unbind');
+  return json({ error_message: '该接口未开放' }, 404);
+}
+
 export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
@@ -143,6 +303,7 @@ export async function onRequest(context) {
     if (path === '/_auth/logout' && request.method === 'POST') {
       return json({ ok: true }, 200, { 'Set-Cookie': tokenCookie('', 0) });
     }
+    if (path.startsWith('/_github/')) return await github(request, path, context);
     return await proxy(request, path, url.search, context);
   } catch (err) {
     return json({ error_message: '代理请求失败', detail: String(err && err.message) }, 502);

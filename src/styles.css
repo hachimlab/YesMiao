@@ -1390,6 +1390,15 @@ textarea.FormControl {
 .UserHeader-flair:empty {
   display: none;
 }
+.UserHeader-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+}
+.UserHeader-github:hover {
+  color: var(--link-color);
+}
 .UserHeader-bio {
   margin: 12px 0 0;
   font-size: 15px;

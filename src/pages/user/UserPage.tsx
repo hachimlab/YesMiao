@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, useParams } from 'react-router-dom';
-import { userdb, users, type FollowUser, type Paged, type UserHonor, type WorkCardData } from '../../api';
+import { github, userdb, users, type FollowUser, type Paged, type UserHonor, type WorkCardData } from '../../api';
 import { UserList, WorkGrid } from '../../components/cards';
 import { Icon, type IconName } from '../../components/icons';
 import { Avatar, Button, ErrorBox, ListState, Loading, RssButton, useLoadMore } from '../../components/ui';
@@ -46,6 +46,19 @@ function BlockButton({ honor }: { honor: UserHonor }) {
   );
 }
 
+/** 用户在本站绑定并选择公开的 GitHub 账号（不是编程猫的数据） */
+function GithubLink({ userId }: { userId: number }) {
+  const q = useQuery({ queryKey: ['github', String(userId)], queryFn: () => github.user(String(userId)), staleTime: 5 * 60_000 });
+  const login = q.data?.login;
+  if (!login) return null;
+  return (
+    <a className="UserHeader-github" href={`https://github.com/${login}`} target="_blank" rel="noopener noreferrer" title="GitHub">
+      <Icon name="github" />
+      {login}
+    </a>
+  );
+}
+
 /** Discourse 式的个人资料头：大头像 + 名字 + 简介，下面一行统计 */
 export function UserHeader({ honor, actions }: { honor: UserHonor; actions?: ReactNode }) {
   const stats = [
@@ -66,6 +79,7 @@ export function UserHeader({ honor, actions }: { honor: UserHonor; actions?: Rea
             {honor.is_official_certification ? <span className="Badge Badge--author">官方认证</span> : null}
             {honor.author_level ? <span className="Badge Badge--author">Lv{honor.author_level}</span> : null}
             {honor.work_shop_name && <span>工作室：{honor.work_shop_name}</span>}
+            <GithubLink userId={honor.user_id} />
           </div>
           {honor.user_description && <p className="UserHeader-bio">{honor.user_description}</p>}
         </div>

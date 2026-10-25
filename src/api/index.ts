@@ -4,6 +4,7 @@ import type {
   CollectedWork,
   FollowUser,
   ForumComment,
+  GithubBinding,
   Message,
   MyDetails,
   Notice,
@@ -222,4 +223,15 @@ export const me = {
   messageCount: () => api<{ query_type: MessageType; count: number }[]>('/web/message-record/count'),
   messages: (type: MessageType, page: number) =>
     api<Paged<Message>>('/web/message-record', { query: { query_type: type, offset: (page - 1) * 10, limit: 10 } }),
+};
+
+/* ---------- GitHub 绑定（存在本站 KV 里，不是编程猫的功能） ---------- */
+
+export const github = {
+  /** 浏览器整页跳过去，由代理重定向到 GitHub 授权页 */
+  startUrl: '/api/_github/start',
+  mine: () => api<{ configured: boolean; binding: GithubBinding | null }>('/_github/me'),
+  setVisible: (show: boolean) => api<void>('/_github/visibility', { method: 'POST', body: { show } }),
+  unbind: () => api<void>('/_github/unbind', { method: 'POST', body: {} }),
+  user: (id: string) => api<{ login: string | null }>(`/_github/u/${id}`),
 };

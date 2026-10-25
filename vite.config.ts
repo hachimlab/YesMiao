@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { IncomingMessage } from 'node:http';
 import { createHash } from 'node:crypto';
@@ -15,7 +15,31 @@ async function readBody(req: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-type PagesFunction = (context: { request: Request }) => Promise<Response>;
+interface DevEnv {
+  YM_KV: { get(key: string, type?: 'json'): Promise<unknown>; put(key: string, value: string): Promise<void>; delete(key: string): Promise<void> };
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+}
+
+type PagesFunction = (context: { request: Request; env: DevEnv; waitUntil(p: Promise<unknown>): void }) => Promise<Response>;
+
+/** 本地开发没有 Cloudflare KV，用内存里的 Map 代替，重启 dev server 就清空 */
+function memoryKV(): DevEnv['YM_KV'] {
+  const store = new Map<string, string>();
+  return {
+    async get(key, type) {
+      const v = store.get(key);
+      if (v === undefined) return null;
+      return type === 'json' ? JSON.parse(v) : v;
+    },
+    async put(key, value) {
+      store.set(key, value);
+    },
+    async delete(key) {
+      store.delete(key);
+    },
+  };
+}
 
 const FUNCTIONS: [string, PagesFunction][] = [
   ['/api', apiFunction],
@@ -26,6 +50,9 @@ function edgeProxy(): Plugin {
   return {
     name: 'yesmiao-edge-proxy',
     configureServer(server) {
+      // GitHub OAuth App 的 id 和 secret 写在 .env.local 里（已被 .gitignore 忽略）
+      const vars = loadEnv(server.config.mode, process.cwd(), 'GITHUB_');
+      const env: DevEnv = { YM_KV: memoryKV(), GITHUB_CLIENT_ID: vars.GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: vars.GITHUB_CLIENT_SECRET };
       for (const [prefix, onRequest] of FUNCTIONS) {
         server.middlewares.use(prefix, async (req, res) => {
           const url = new URL(prefix + (req.url || ''), `http://${req.headers.host}`);
@@ -37,7 +64,7 @@ function edgeProxy(): Plugin {
             headers,
             body: hasBody ? new Uint8Array(await readBody(req)) : undefined,
           });
-          const response: Response = await onRequest({ request });
+          const response: Response = await onRequest({ request, env, waitUntil: () => {} });
           res.statusCode = response.status;
           response.headers.forEach((v, k) => res.setHeader(k, v));
           res.end(Buffer.from(await response.arrayBuffer()));
